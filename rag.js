@@ -1,7 +1,15 @@
 (function() {
     function loadChatbot() {
-        const chatbotContainer = document.createElement('div');
-        chatbotContainer.id = 'chatbot-container';
+        const chatbotContainer = document.getElementById('chatbot-container');
+
+        // Hardcoded values or dynamic retrieval (adjust as needed)
+        const userIdentifier = "dummy_user_12345"; 
+        const userName = "Dummy User"; // Replace with actual user name
+        const userEmail = "dummyuser@example.com"; // Replace with actual user email
+        const userStatus = "premium";  // Replace with actual membership level
+        const selectedRag = "External FAQs";  // Adjust based on login status
+        const destinationValue = "default_destination";  // Replace with actual destination value
+
         chatbotContainer.innerHTML = `
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
             <style>
@@ -91,22 +99,64 @@
             chatbotBox.style.display = chatbotBox.style.display === 'none' ? 'flex' : 'none';
         });
 
-        sendButton.addEventListener('click', () => {
+        sendButton.addEventListener('click', async () => {
             const message = chatbotMessage.value.trim();
             if (message) {
                 const userMessage = document.createElement('div');
+                userMessage.className = 'message_user';
                 userMessage.innerHTML = `<strong>You:</strong> ${message}`;
                 chatbotContent.appendChild(userMessage);
                 chatbotMessage.value = '';
                 chatbotContent.scrollTop = chatbotContent.scrollHeight;
 
-                // Simulate bot response (replace this with actual bot API call)
-                setTimeout(() => {
-                    const botResponse = document.createElement('div');
-                    botResponse.innerHTML = `<strong>Bot:</strong> This is a simulated response.`;
-                    chatbotContent.appendChild(botResponse);
-                    chatbotContent.scrollTop = chatbotContent.scrollHeight;
-                }, 1000);
+                let botMessage = document.createElement("div");
+                botMessage.className = 'message_bot';
+                botMessage.innerHTML = "<strong>RAG Chatbot:</strong> <span id='bot-response'></span>";
+                chatbotContent.appendChild(botMessage);
+                let botResponseSpan = botMessage.querySelector('#bot-response');
+
+                try {
+                    const response = await fetch("https://qjqmv2vx22.ap-southeast-2.awsapprunner.com/api/generate_response", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            user_query: message,
+                            user_id: userIdentifier,  // Hardcoded user identifier
+                            name: userName,  // Hardcoded user name
+                            email: userEmail,  // Hardcoded user email
+                            membership_level: userStatus,  // Hardcoded membership level
+                            selected_rag: selectedRag,  // Context based on login status
+                            destination: destinationValue  // Hardcoded destination value
+                        })
+                    });
+
+                    const reader = response.body.getReader();
+                    const textDecoder = new TextDecoder();
+                    let fullResponse = '';
+                    
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        const chunk = textDecoder.decode(value, { stream: true });
+                        fullResponse += chunk;
+
+                        // Parsing markdown to HTML using marked.js
+                        let parsedHTML = marked.parse(fullResponse);
+                        botResponseSpan.innerHTML = parsedHTML;
+
+                        // Open links in a new tab
+                        let links = botResponseSpan.getElementsByTagName('a');
+                        for (let i = 0; i < links.length; i++) {
+                            links[i].setAttribute('target', '_blank');
+                        }
+
+                        chatbotContent.scrollTop = chatbotContent.scrollHeight;
+                    }
+                } catch (error) {
+                    botResponseSpan.innerHTML = "Error: Unable to fetch response.";
+                }
             }
         });
     }
